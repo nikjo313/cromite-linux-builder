@@ -1,0 +1,56 @@
+name: Build Cromite Linux
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y git python3 curl unzip xz-utils build-essential openjdk-11-jdk ninja-build zip libnss3-tools locales
+
+      - name: Set JAVA_HOME
+        run: echo "JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64" >> $GITHUB_ENV
+
+      - name: Clone depot_tools
+        run: |
+          git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
+          echo "$PWD/depot_tools" >> $GITHUB_PATH
+
+      - name: Fetch Chromium for Linux
+        run: |
+          mkdir -p ~/cromite_build
+          cd ~/cromite_build
+          fetch --nohooks chromium
+          cd src
+          gclient sync
+
+      - name: Clone Cromite and apply patches
+        run: |
+          cd ~/cromite_build
+          git clone https://github.com/uazo/cromite.git
+          cd cromite
+          export CROMITE_PATH=$PWD
+          cd ~/cromite_build/src
+          git checkout $(cat $CROMITE_PATH/build/RELEASE)
+          gclient sync
+          while read patch; do
+            git am "$CROMITE_PATH/patches/$patch"
+          done < $CROMITE_PATH/build/cromite_patches_list.txt
+          mkdir -p out/Default
+          cp $CROMITE_PATH/build/cromite.gn_args out/Default/args.gn
+
+      - name: Build Cromite Linux binary
+        run: |
+          cd ~/cromite_build/src
+          gn gen out/Default
+          ninja -C out/Default chrome
+
+      - name: Upload Cromite binary
+        uses: actions/upload-artifact@v2
+        with:
+          name: cromite-linux
+          path: ~/cromite_build/src/out/Default/chrome
