@@ -54,3 +54,11 @@ jobs:
         with:
           name: cromite-linux
           path: ~/cromite_build/src/out/Default/chrome
+      - name: Cache actions
+        uses: actions/cache@v2
+        with:
+          path: ~/.cache
+          key: ${{ runner.os }}-actions-${{ github.sha }}
+          restore-keys: |
+           ${{ runner.os }}-actions-
+
